@@ -9,14 +9,25 @@
 <body>
   <header>
     <h1>pokerlab</h1>
+    <nav id="tabs">
+      <button data-tab="solver" class="on">Solver</button>
+      <button data-tab="train">Train</button>
+      <button data-tab="quiz">Daily quiz</button>
+      <button data-tab="hands">Hands</button>
+      <button data-tab="stats">Stats</button>
+    </nav>
     <span id="solver-status" class="pill"></span>
   </header>
 
-  <main>
+  <!-- ===================== Solver ===================== -->
+  <main id="tab-solver" class="tab two-col">
     <aside>
       <section>
         <h2>New solve</h2>
         <form id="spot-form">
+          <label>Load preset
+            <select id="preset-select"><option value="">(pick a preset)</option></select>
+          </label>
           <label>Board <input name="board" value="Qs,Jh,2h" placeholder="Qs,Jh,2h[,7d[,3c]]" required></label>
           <div class="row">
             <label>Pot <input name="pot" type="number" step="any" value="50" min="1"></label>
@@ -32,26 +43,33 @@
             <label>Accuracy (% pot) <input name="accuracy" type="number" step="any" value="0.5" min="0.01"></label>
             <label>Max iterations <input name="max_iteration" type="number" value="200" min="1" max="5000"></label>
           </div>
-          <button type="submit">Solve</button>
+          <label class="check"><input type="checkbox" name="next_street"> Keep the next street in the result (needed to play or browse past the flop/turn; bigger and slower to load)</label>
+          <div class="row">
+            <button type="submit">Solve</button>
+            <button type="button" id="save-preset" class="ghost">Save ranges as preset…</button>
+          </div>
           <p class="hint">River solves take seconds, flop solves take minutes. All-in is always available. Identical spots are cached.</p>
           <p id="form-error" class="error"></p>
         </form>
       </section>
-
       <section>
         <h2>Solves</h2>
         <ul id="solve-list" class="solve-list"></ul>
       </section>
     </aside>
 
-    <section id="viewer">
-      <div id="empty">Pick a solve on the left, or start a new one.</div>
+    <section class="panel" id="viewer">
+      <div id="empty" class="muted center">Pick a solve on the left, or start a new one.</div>
       <div id="viewer-body" hidden>
         <div class="viewer-head">
           <div id="solve-title"></div>
-          <button id="delete-solve" class="ghost" title="Delete this solve">Delete</button>
+          <div class="row-btns">
+            <button id="drill-node" class="ghost" title="Practise this exact decision">Drill this node</button>
+            <button id="delete-solve" class="ghost">Delete</button>
+          </div>
         </div>
         <nav id="breadcrumb"></nav>
+        <div id="ctx-line" class="muted"></div>
         <div id="status-box" hidden></div>
         <div id="node-box" hidden>
           <div id="actor"></div>
@@ -60,9 +78,75 @@
           <div id="actions"></div>
           <div id="detail"></div>
         </div>
+        <div id="deal-box" hidden>
+          <div class="muted" id="deal-note"></div>
+          <div id="deal-cards" class="deal-cards"></div>
+        </div>
       </div>
     </section>
   </main>
-  <script src="app.js"></script>
+
+  <!-- ===================== Train ===================== -->
+  <main id="tab-train" class="tab" hidden>
+    <section class="panel">
+      <div class="controls">
+        <label>Solve <select id="train-solve"></select></label>
+        <label>You play
+          <select id="train-hero"><option value="random">Random</option><option value="oop">OOP</option><option value="ip">IP</option></select>
+        </label>
+        <button id="train-deal">Deal a hand</button>
+        <span id="train-session" class="muted"></span>
+      </div>
+      <p class="hint">You play against the solver. Each of your decisions is graded by how often the solver takes that action with your exact hand. Hands continue to the turn/river only if the solve was made with "Keep the next street".</p>
+      <p id="train-error" class="error"></p>
+      <div id="train-table"></div>
+    </section>
+  </main>
+
+  <!-- ===================== Quiz ===================== -->
+  <main id="tab-quiz" class="tab" hidden>
+    <section class="panel">
+      <div id="quiz-head"></div>
+      <p id="quiz-error" class="error"></p>
+      <div id="quiz-body"></div>
+    </section>
+  </main>
+
+  <!-- ===================== Hands ===================== -->
+  <main id="tab-hands" class="tab two-col" hidden>
+    <aside>
+      <section>
+        <h2>Import hand histories</h2>
+        <textarea id="hh-text" rows="6" placeholder="Paste PokerStars hand history text here"></textarea>
+        <div class="row-btns"><button id="hh-import">Import</button><input type="file" id="hh-file" accept=".txt"></div>
+        <p id="hh-msg" class="hint"></p>
+      </section>
+      <section>
+        <h2>Hands</h2>
+        <ul id="hand-list" class="solve-list tall"></ul>
+      </section>
+      <section>
+        <h2>Presets</h2>
+        <ul id="preset-list" class="preset-list"></ul>
+        <p class="hint">A preset is the pair of preflop ranges for a pot type (srp, 3bp, ...). Hands are analysed with the preset matching their pot type. The built-in one is only an example.</p>
+      </section>
+    </aside>
+    <section class="panel" id="hand-detail">
+      <div class="muted center">Import some hands, then pick one.</div>
+    </section>
+  </main>
+
+  <!-- ===================== Stats ===================== -->
+  <main id="tab-stats" class="tab" hidden>
+    <section class="panel" id="stats-body"></section>
+  </main>
+
+  <script src="common.js"></script>
+  <script src="solver.js"></script>
+  <script src="trainer.js"></script>
+  <script src="quiz.js"></script>
+  <script src="hands.js"></script>
+  <script src="stats.js"></script>
+  <script src="main.js"></script>
 </body>
 </html>

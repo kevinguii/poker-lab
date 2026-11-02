@@ -1,28 +1,22 @@
 # Roadmap
 
-Status: **v0.1** = solve, cache, browse. Everything below is ordered by how much it unlocks.
+## Done
+- **v0.1** Spot model, TexasSolver adapter, SQLite cache, API, 13×13 viewer.
+- **v0.2** Street-aware engine (chance nodes, dealt-card blocking, pot/stack tracking), trainer and drills with showdowns,
+  daily quiz with streak, stats, presets, PokerStars hand history import and flop/turn analysis, tabbed UI.
+  Verified against real solver output (street changes, 60 simulated hands, a real hand analysis) and in a browser.
 
-## Done (v0.1)
-- Spot model with validation and content-hash cache key
-- TexasSolver adapter with live progress (iteration / exploitability)
-- SQLite store, background worker, FastAPI API, static viewer
-- Tests including a real-solver end-to-end run and a real-output fixture
-
-## Next
-1. **Spot presets.** Saved range/size templates (SRP BTN vs BB, 3-bet pots, etc.), so a new solve is two clicks.
-   Preflop ranges can come from your own notes or the ranges you are allowed to export from your accounts.
-2. **Trainer v1.** Pick a cached solve, deal a random hand from the actor's range, ask for an action, and score it by
-   the solver's frequency for that action (since the dump has no EV). Track accuracy per spot/street in SQLite.
-3. **EV.** Needed for a real "EV loss" trainer. Options: compute best-response EV ourselves from the tree and ranges
-   (the tree and reach weights are already available), or switch/add an engine that exports EV.
-   Decide after trying option 1 on a river solve, where it is cheap to verify.
-4. **Hand history analyzer.** Parse PokerStars/GG text histories, map each hero postflop decision to the nearest cached
-   or newly solved spot (board + approximate ranges + stacks), flag the biggest frequency/EV deviations.
-5. **Daily quiz.** One random decision per day from your solves, with a short explanation of the solver's mix.
+## Next, roughly by value
+1. **EV.** Needed for an "EV loss" score instead of frequency. The tree, ranges and reach are already available, so a
+   best-response / EV pass over the tree is the likely route. River-complete trees are the cheap place to verify it.
+2. **River decisions in hand analysis.** Needs a river solve whose ranges are narrowed by the actual flop/turn line
+   (take the reach from the flop solve, then solve the river spot).
+3. **Range editor.** Paint ranges on the 13×13 grid instead of typing strings; import/export presets.
+4. **More hand history sources.** GGPoker and other formats; multiway hands (needs a multiway engine).
+5. **Presets by position.** Today a preset is keyed by pot type only (`srp`, `3bp`...). BTN-vs-BB and CO-vs-BTN differ a lot.
+6. **Solve queue controls.** Cancel a running solve, reorder the queue.
 
 ## Later / maybe
-- Turn and river re-solving from a flop solve (`dump_rounds=2`, or re-solve from a chosen node).
-- Range editor (13×13 painting) instead of text.
-- Preflop solving (hard: not covered by open-source postflop solvers).
-- Multiway, ICM, PLO (each needs a different engine).
-- Packaging as a desktop app (Tauri) once the API is stable.
+- Preflop solving (no open-source postflop solver covers it).
+- ICM, PLO, multiway (each needs a different engine).
+- Desktop packaging (Tauri) once the API settles.

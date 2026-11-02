@@ -1,4 +1,5 @@
 import json
+import sys
 from pathlib import Path
 
 import pytest
@@ -6,6 +7,7 @@ import pytest
 from pokerlab.spot import Spot
 
 FIXTURES = Path(__file__).parent / "fixtures"
+sys.path.insert(0, str(Path(__file__).parent))  # lets tests `import trees`
 
 
 @pytest.fixture(scope="session")

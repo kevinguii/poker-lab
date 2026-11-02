@@ -40,7 +40,7 @@ class SolveStore:
         self.dir = Path(data_dir) if data_dir else default_data_dir()
         self.dir.mkdir(parents=True, exist_ok=True)
         self._lock = threading.Lock()
-        self._db = sqlite3.connect(self.dir / "pokerlab.db", check_same_thread=False)
+        self._db = sqlite3.connect(self.dir / "pokerlab.db", check_same_thread=False, timeout=30)
         self._db.row_factory = sqlite3.Row
         with self._lock:
             self._db.executescript(_SCHEMA)
@@ -50,6 +50,10 @@ class SolveStore:
                 "WHERE status IN ('queued','running')"
             )
             self._db.commit()
+
+    def shared(self) -> tuple[sqlite3.Connection, threading.Lock]:
+        """The connection and lock other stores (progress, hands) use, so all state lives in one file."""
+        return self._db, self._lock
 
     # ---- writes -----------------------------------------------------------
     def create_or_get(self, spot: Spot) -> tuple[str, bool]:

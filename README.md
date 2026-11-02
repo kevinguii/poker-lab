@@ -1,11 +1,10 @@
 # pokerlab
 
-A local-only poker study app: solve a spot, browse the strategy on a 13×13 grid, click through the
-betting tree. Built to reproduce the core ideas of GTO-training sites (solution browser, custom
-solves, trainer, hand analysis) for personal use, with no hosting and no account.
+A local-only poker study app in one repo: **solve** a spot, **browse** the strategy, **train** against the
+solver, take a **daily quiz**, and **analyse your own hand histories**. No hosting, no account, one SQLite file.
 
-It does **not** ship a solution library. Spots are solved on demand by an external open-source
-solver ([TexasSolver](https://github.com/bupticybee/TexasSolver)) and cached in a single SQLite file.
+It does not ship a solution library. Spots are solved on demand by an external open-source solver
+([TexasSolver](https://github.com/bupticybee/TexasSolver)) and cached by content hash.
 
 ## Quick start
 
@@ -15,17 +14,50 @@ scripts/build_solver.sh
 
 # 2. Install and run
 pip install -e ".[dev]"
-pokerlab                      # http://127.0.0.1:8000
+pokerlab                      # http://127.0.0.1:8000   (data lives in ./data, override with POKERLAB_DATA)
 
-# 3. Tests (the real-solver test runs automatically once step 1 is done)
+# 3. Tests (real-solver tests run automatically once step 1 is done, ~35 s extra)
 pytest
 ```
 
-In the UI: fill in a board and two ranges, hit **Solve**, then click cells to see per-combo
-frequencies and the action buttons to walk the tree. Identical spots are cached by content hash.
+## What is in it
 
-Range syntax: `AA,KK:0.5,AKs,AQo:0.75,KQ` (pairs, `s`/`o` suffix, optional `:weight`; no suffix means both).
-Pot and stack are arbitrary chip units (the sample uses pot 50, stack 200).
+| Tab | What it does |
+|---|---|
+| **Solver** | Enter a board, ranges, stacks and bet sizes, then solve. Browse the result on a 13×13 grid with per-combo detail, click through the tree, and **cross street changes** by picking the next card (turn/river need *Keep the next street*). **Drill this node** jumps to the trainer on that exact decision. Presets can be loaded or saved from here. |
+| **Train** | Play hands against the solver (it samples the opponent's hand and every action from the solution, deals the next card, and settles showdowns). Or drill one decision repeatedly. |
+| **Daily quiz** | Five realistic decisions per day, drawn from your own solves, fixed all day, answers final, with a streak. |
+| **Hands** | Import PokerStars text histories. Heads-up flop hands become a solvable spot (ranges from a preset, the bet sizes actually used are added to the tree). Once solved, every one of *your* flop and turn decisions is graded against the solver. |
+| **Stats** | Accuracy across the trainer, drills and quiz: by street, by solve, daily activity, recent mistakes. |
+
+### How decisions are graded
+
+TexasSolver's output has strategies but no EV, so grading is frequency based: the solver's probability of
+the action you chose *with your exact hand*.
+
+| Verdict | Rule |
+|---|---|
+| **correct** | you chose the solver's top action, or it takes your action ≥ 25% of the time |
+| **mix** | it takes your action 5–25% of the time (acceptable low-frequency play) |
+| **mistake** | it takes your action < 5% of the time |
+
+`score = freq(yours) / freq(best)`. Thresholds live at the top of `src/pokerlab/training.py`.
+
+### Hand history analysis: scope (read this before trusting a verdict)
+
+- PokerStars text format, no-limit hold'em, cash or tournament. Other sites are not parsed.
+- Only **heads-up flops with a known hero** are analysed; the reason is shown for every other hand.
+- Ranges come from your **presets** by pot type (`srp`, `3bp`, ...), not from the hand. The built-in
+  `srp-sample` is only the example from the solver's README, so replace it with ranges you trust, or
+  every verdict inherits that assumption. If your hand is not in the preset range it is reported as
+  `out_of_range`, not graded.
+- The spot is a flop solve that keeps the turn, so **flop and turn** decisions are graded with properly
+  narrowed ranges. **River decisions are listed but not graded.**
+- Solves use looser settings (accuracy 1% of pot, 150 iterations) because flop solves are slow. The
+  exploitability of each solve is shown next to the result; treat verdicts from poorly converged solves with care.
+- Graded hand decisions are shown per hand and are not added to Stats.
+- Amounts are converted to big blinds and solved in 0.1bb units. Your real bet sizes are added to the tree so they
+  can be matched; an action with no close equivalent stops grading at that point instead of guessing.
 
 ## Layout
 
@@ -35,29 +67,32 @@ src/pokerlab/
   ranges.py                 range parsing, 169-class grid helpers
   spot.py                   Spot model, validation, content hash, solver script generation
   solver.py                 runs console_solver, streams progress, parses result JSON
-  strategy.py               SolveView: walk the tree, rebuild reach, aggregate to the grid
-  cache.py                  SQLite store (gzip'd result trees)
-  jobs.py                   single background worker (solves already use all cores)
-  api.py / cli.py           FastAPI app (/api/*) + static viewer, `pokerlab` command
-web/                        no-build static front end (vanilla JS)
-tests/                      unit + API tests, and a real-solver end-to-end test
-docs/                       FEATURE_MATRIX.md (what the target sites offer), ROADMAP.md
+  strategy.py               SolveView: walk the tree (incl. chance nodes), reach, pot/stack tracking, grid
+  evaluator.py              best-of-7 hand evaluator (showdowns, hand names)
+  training.py               grading, exact matchup sampling, HandSession, question generation
+  quiz.py                   deterministic, persisted daily quiz
+  handhistory.py            PokerStars parser
+  analysis.py               replay a hand, build its spot, grade the hero's decisions
+  cache.py / progress.py    SQLite: solves; attempts, quiz, presets, hands (one shared file)
+  jobs.py                   single background solver worker
+  api.py api_train.py api_hands.py   FastAPI app (/api/*) + static front end
+web/                        no-build front end: common, solver, trainer, quiz, hands, stats, main (.js)
+tests/                      unit + API tests, hand-built tree with exact numbers, real-solver tests
+docs/                       FEATURE_MATRIX.md, ROADMAP.md
 ```
 
 ## Things worth knowing
 
-- **Speed.** Measured on a 2-core cloud box: a tiny river solve takes about 5 s; a full flop solve
-  with the default sizes runs about 1.7 s per iteration, so 200 iterations is several minutes.
-  Start with river/turn boards or narrow ranges, and raise `accuracy` (it is % of pot) for quick looks.
-- **No EV in the output.** TexasSolver's dump contains strategies only. That is why the viewer shows
-  frequencies, not EV, and why a trainer scored by EV loss needs extra work (see ROADMAP).
-- **Aggregation is reach-weighted.** The dump has conditional strategies only, so the viewer
-  rebuilds each combo's reach probability along the path before averaging into hand classes.
-- **`dump_rounds`.** `1` (default) stores only the current street, which keeps results small.
-  `2` also stores the next street (the sample dump was 22 MB uncompressed).
-- **Licence.** TexasSolver is AGPL-3.0 and is run as a separate process, never copied into this
-  repo. Personal local use is fine. If you ever host this for other people, its README says network
-  services need a commercial licence, so check first.
+- **Speed.** Measured on a 2-core cloud box: a tiny river solve ≈ 5 s, a turn+river solve with small ranges ≈ 10 s,
+  a full flop solve with default sizes ≈ 1.7 s per iteration. Start with small boards/ranges. Your own machine is
+  probably faster.
+- **Size.** *Keep the next street* stores the turn (and river on turn boards) in the result: 10-20 MB of JSON per solve
+  before compression. It is needed to play on or browse past a street change and for turn grading in Hands.
+- **Reach is rebuilt.** The dump has conditional strategies only, so the viewer reconstructs each combo's reach along the
+  path (and removes combos blocked by dealt cards) before aggregating to hand classes.
+- **Solver rounding.** TexasSolver rounds bet amounts to whole chips, which is why hand-derived spots use 0.1bb units.
+- **Licence.** TexasSolver is AGPL-3.0 and is run as a separate process, never copied into this repo. Personal local use
+  is fine. If you ever host this for other people, its README says network services need a commercial licence.
 - **No auth.** The server binds to 127.0.0.1 by default. Keep it that way.
 
 See [docs/ROADMAP.md](docs/ROADMAP.md) for what is next.
