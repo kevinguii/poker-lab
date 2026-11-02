@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>pokerlab</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <h1>pokerlab</h1>
+    <span id="solver-status" class="pill"></span>
+  </header>
+
+  <main>
+    <aside>
+      <section>
+        <h2>New solve</h2>
+        <form id="spot-form">
+          <label>Board <input name="board" value="Qs,Jh,2h" placeholder="Qs,Jh,2h[,7d[,3c]]" required></label>
+          <div class="row">
+            <label>Pot <input name="pot" type="number" step="any" value="50" min="1"></label>
+            <label>Eff. stack <input name="effective_stack" type="number" step="any" value="200" min="1"></label>
+          </div>
+          <label>OOP range <textarea name="oop_range" rows="3"></textarea></label>
+          <label>IP range <textarea name="ip_range" rows="3"></textarea></label>
+          <div class="row">
+            <label>Bet sizes (% pot) <input name="bets" value="50"></label>
+            <label>Raise sizes (%) <input name="raises" value="60"></label>
+          </div>
+          <div class="row">
+            <label>Accuracy (% pot) <input name="accuracy" type="number" step="any" value="0.5" min="0.01"></label>
+            <label>Max iterations <input name="max_iteration" type="number" value="200" min="1" max="5000"></label>
+          </div>
+          <button type="submit">Solve</button>
+          <p class="hint">River solves take seconds, flop solves take minutes. All-in is always available. Identical spots are cached.</p>
+          <p id="form-error" class="error"></p>
+        </form>
+      </section>
+
+      <section>
+        <h2>Solves</h2>
+        <ul id="solve-list" class="solve-list"></ul>
+      </section>
+    </aside>
+
+    <section id="viewer">
+      <div id="empty">Pick a solve on the left, or start a new one.</div>
+      <div id="viewer-body" hidden>
+        <div class="viewer-head">
+          <div id="solve-title"></div>
+          <button id="delete-solve" class="ghost" title="Delete this solve">Delete</button>
+        </div>
+        <nav id="breadcrumb"></nav>
+        <div id="status-box" hidden></div>
+        <div id="node-box" hidden>
+          <div id="actor"></div>
+          <div id="legend"></div>
+          <div id="grid"></div>
+          <div id="actions"></div>
+          <div id="detail"></div>
+        </div>
+      </div>
+    </section>
+  </main>
+  <script src="app.js"></script>
+</body>
+</html>

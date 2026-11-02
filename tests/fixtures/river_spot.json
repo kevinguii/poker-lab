@@ -1,0 +1,78 @@
+{
+ "board": "Qs,Jh,2h,7d,3c",
+ "ip_range": "AA,KK,QQ,AKs,QJs,JTs,T9s:0.5",
+ "oop_range": "KK,QQ,JJ,AQs,KQs,76s",
+ "pot": 50,
+ "effective_stack": 100,
+ "bet_sizes": {
+  "oop": {
+   "flop": {
+    "bet": [
+     50
+    ],
+    "raise": [
+     60
+    ],
+    "allin": []
+   },
+   "turn": {
+    "bet": [
+     50
+    ],
+    "raise": [
+     60
+    ],
+    "allin": []
+   },
+   "river": {
+    "bet": [
+     50
+    ],
+    "raise": [
+     60,
+     100
+    ],
+    "allin": [],
+    "donk": [
+     50
+    ]
+   }
+  },
+  "ip": {
+   "flop": {
+    "bet": [
+     50
+    ],
+    "raise": [
+     60
+    ],
+    "allin": []
+   },
+   "turn": {
+    "bet": [
+     50
+    ],
+    "raise": [
+     60
+    ],
+    "allin": []
+   },
+   "river": {
+    "bet": [
+     50
+    ],
+    "raise": [
+     60,
+     100
+    ],
+    "allin": []
+   }
+  }
+ },
+ "allin_threshold": 0.67,
+ "accuracy": 0.3,
+ "max_iteration": 60,
+ "use_isomorphism": true,
+ "dump_rounds": 1,
+ "threads": 0
+}
