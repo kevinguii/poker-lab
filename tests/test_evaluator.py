@@ -66,3 +66,25 @@ def test_names(cards, name):
 def test_needs_five_to_seven_cards():
     with pytest.raises(ValueError):
         best_hand(["As", "Kd"])
+
+
+def test_fast_rank_matches_best_hand_ordering():
+    import random
+
+    from pokerlab.evaluator import best_hand, fast_rank, pack_rank
+
+    deck = [r + s for r in "AKQJT98765432" for s in "cdhs"]
+    rng = random.Random(11)
+    for n in (5, 6, 7):
+        for _ in range(4000):
+            cards = rng.sample(deck, n)
+            assert fast_rank(cards) == pack_rank(best_hand(cards)), cards
+
+
+def test_fast_rank_special_hands():
+    from pokerlab.evaluator import fast_rank
+
+    wheel = fast_rank(["Ac", "2d", "3h", "4s", "5c", "Kd", "Kh"])
+    six_high = fast_rank(["2c", "3d", "4h", "5s", "6c", "Kd", "Kh"])
+    assert wheel < six_high
+    assert fast_rank(["Ah", "Kh", "Qh", "Jh", "Th", "2c", "2d"]) > fast_rank(["9s", "9c", "9h", "9d", "Ac", "Ad", "Ah"])

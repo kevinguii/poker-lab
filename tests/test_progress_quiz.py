@@ -1,4 +1,5 @@
 import json
+import math
 
 import pytest
 
@@ -146,3 +147,25 @@ def test_deleted_solve_replaces_unanswered_questions(quiz):
     quiz.progress.replace_quiz_question(day, 0, {"solve_id": "gone", "path": [], "role": "oop", "combo": "KhKd"})
     t = quiz.today(day)
     assert t["questions"][0]["solve_id"] in (quiz.sid, sid2)       # replaced with a valid one
+
+
+def test_attempts_store_ev_loss_and_old_databases_are_migrated(tmp_path):
+    import sqlite3
+    import threading
+
+    from pokerlab.progress import ProgressStore
+
+    db = sqlite3.connect(tmp_path / "old.db", check_same_thread=False)
+    db.row_factory = sqlite3.Row
+    db.execute("CREATE TABLE attempts (id INTEGER PRIMARY KEY AUTOINCREMENT, ts REAL NOT NULL, solve_id TEXT NOT NULL,"
+               " mode TEXT NOT NULL, street TEXT NOT NULL, path TEXT NOT NULL, hero_role TEXT NOT NULL, combo TEXT NOT NULL,"
+               " chosen TEXT NOT NULL, best TEXT NOT NULL, freq REAL NOT NULL, score REAL NOT NULL, verdict TEXT NOT NULL)")
+    db.execute("INSERT INTO attempts VALUES (1, 0, 's', 'play', 'flop', '[]', 'oop', 'AsKs', 'CHECK', 'CHECK', .5, 1, 'correct')")
+    db.commit()
+    ps = ProgressStore(db, threading.Lock())                  # must add the new columns without losing the old row
+    base = {"solve_id": "s", "mode": "play", "street": "flop", "path": [], "hero_role": "oop", "combo": "AsKs",
+            "chosen": "CHECK", "best": "CHECK", "freq": 0.5, "score": 0.9, "verdict": "correct"}
+    ps.record_attempt({**base, "basis": "ev", "ev_loss": 2.0, "ev_loss_pot": 0.04})
+    ps.record_attempt(base)                                   # frequency-graded attempt: no EV columns
+    st = ps.stats()
+    assert st["total"] == 3 and st["ev_graded"] == 1 and math.isclose(st["avg_ev_loss_pot"], 0.04)

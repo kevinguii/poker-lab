@@ -21,10 +21,28 @@ if [ ! -d "$DEST/.git" ]; then
 fi
 
 cd "$DEST"
+# The Python bindings (pybind11) are not used by the console solver and its CMake needs distutils, which Python 3.12+ removed.
+sed -i.bak -E 's|^(include_directories\(ext/pybind11/include\))|#\1|; s|^(add_subdirectory\(ext/pybind11\))|#\1|' CMakeLists.txt && rm -f CMakeLists.txt.bak
 mkdir -p build
 cd build
-cmake -DCMAKE_BUILD_TYPE=Release ..
-make -j"$JOBS" install
+# The bundled googletest predates CMake 4, which dropped support for cmake_minimum_required < 3.5.
+CMAKE_ARGS=(-DCMAKE_BUILD_TYPE=Release -DCMAKE_POLICY_VERSION_MINIMUM=3.5)
+if [ "$(uname)" = "Darwin" ]; then
+  # Apple clang has no OpenMP; use Homebrew's libomp (keg-only, so CMake cannot find it by itself).
+  command -v brew >/dev/null || { echo "macOS needs Homebrew's libomp: brew install libomp" >&2; exit 1; }
+  OMP="$(brew --prefix libomp 2>/dev/null)"
+  [ -d "$OMP/lib" ] || { echo "missing libomp: brew install libomp" >&2; exit 1; }
+  OMP_FLAGS="-Xpreprocessor -fopenmp -I$OMP/include"
+  CMAKE_ARGS+=(
+    "-DOpenMP_C_FLAGS=$OMP_FLAGS" "-DOpenMP_CXX_FLAGS=$OMP_FLAGS"
+    -DOpenMP_C_LIB_NAMES=omp -DOpenMP_CXX_LIB_NAMES=omp
+    "-DOpenMP_omp_LIBRARY=$OMP/lib/libomp.dylib"
+    "-DCMAKE_EXE_LINKER_FLAGS=-L$OMP/lib -lomp -Wl,-rpath,$OMP/lib"
+  )
+fi
+cmake "${CMAKE_ARGS[@]}" ..
+cmake --build . --target console_solver --parallel "$JOBS"
+cmake --install .
 
 echo
 echo "Solver ready: $DEST/install/console_solver"

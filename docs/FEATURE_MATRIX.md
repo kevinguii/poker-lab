@@ -9,7 +9,7 @@ the sites themselves (you have accounts), since GTO Wizard's pricing in particul
 | Pre-solved library (millions of spots) | Yes, Hold'em + PLO | Sim Browser on common flops | **Not replicated**: solve on demand + cache |
 | Browse strategy grid / action tree | Yes | Yes | **Built**, including street changes and per-combo detail |
 | Custom solves | "GTO Wizard AI" (CFR + neural estimates, multiway) | Beta cloud re-solving of turn/river | **Built** (heads-up, TexasSolver) |
-| Trainer with GTO/EV feedback | Any spot, preflop to river | Practice hands vs GTO opponent, custom drills | **Built**: full hands vs the solver, single-node drills; scored by solver frequency, **no EV** |
+| Trainer with GTO/EV feedback | Any spot, preflop to river | Practice hands vs GTO opponent, custom drills | **Built**: full hands vs the solver, single-node drills; graded by **EV loss** where the tree allows it (river-complete or small subtrees), solver frequency otherwise |
 | Hand history analyzer | Upload histories, find leaks | Per-decision insights in drills | **Built (narrow)**: PokerStars, heads-up flops, flop + turn graded, ranges from your presets |
 | Daily quiz / engagement | Coaching content, PokerArena app | Daily Cardle | **Built**: 5 decisions a day from your solves, streak |
 | Progress tracking | Yes | Insights, leaderboards | **Built** (accuracy by street / solve, recent mistakes); no leaderboards |

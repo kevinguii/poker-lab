@@ -25,7 +25,10 @@ CREATE TABLE IF NOT EXISTS attempts (
   best      TEXT NOT NULL,
   freq      REAL NOT NULL,
   score     REAL NOT NULL,
-  verdict   TEXT NOT NULL
+  verdict   TEXT NOT NULL,
+  basis       TEXT NOT NULL DEFAULT 'frequency',   -- ev | frequency
+  ev_loss     REAL,                                -- chips, NULL when graded by frequency
+  ev_loss_pot REAL                                 -- ev_loss / pot at the decision
 );
 CREATE TABLE IF NOT EXISTS quiz_questions (
   day       TEXT NOT NULL,
@@ -81,6 +84,10 @@ class ProgressStore:
         self._db, self._lock = db, lock
         with self._lock:
             self._db.executescript(_SCHEMA)
+            have = {r["name"] for r in self._db.execute("PRAGMA table_info(attempts)").fetchall()}
+            for col, decl in (("basis", "TEXT NOT NULL DEFAULT 'frequency'"), ("ev_loss", "REAL"), ("ev_loss_pot", "REAL")):
+                if col not in have:  # databases created before EV grading
+                    self._db.execute(f"ALTER TABLE attempts ADD COLUMN {col} {decl}")
             if not self._db.execute("SELECT 1 FROM presets WHERE name=?", (SAMPLE_SRP["name"],)).fetchone():
                 self._db.execute(
                     "INSERT INTO presets (name, pot_type, ip_range, oop_range, notes, builtin) VALUES (?,?,?,?,?,1)",
@@ -101,18 +108,19 @@ class ProgressStore:
     def record_attempt(self, fb: dict) -> int:
         with self._lock:
             cur = self._db.execute(
-                "INSERT INTO attempts (ts, solve_id, mode, street, path, hero_role, combo, chosen, best, freq, score, verdict)"
-                " VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+                "INSERT INTO attempts (ts, solve_id, mode, street, path, hero_role, combo, chosen, best, freq, score, verdict,"
+                " basis, ev_loss, ev_loss_pot) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 (time.time(), fb["solve_id"], fb["mode"], fb["street"], json.dumps(fb["path"]), fb["hero_role"],
-                 fb["combo"], fb["chosen"], fb["best"], fb["freq"], fb["score"], fb["verdict"]),
+                 fb["combo"], fb["chosen"], fb["best"], fb["freq"], fb["score"], fb["verdict"],
+                 fb.get("basis", "frequency"), fb.get("ev_loss"), fb.get("ev_loss_pot")),
             )
             self._db.commit()
             return int(cur.lastrowid)
 
     def stats(self, days: int = 14) -> dict:
         overall = self._one(
-            "SELECT COUNT(*) AS n, AVG(score) AS avg_score,"
-            " AVG(verdict='correct') AS correct, AVG(verdict='mix') AS mix, AVG(verdict='mistake') AS mistake FROM attempts"
+            "SELECT COUNT(*) AS n, AVG(score) AS avg_score, AVG(ev_loss_pot) AS avg_ev_loss_pot,"
+            " SUM(basis='ev') AS ev_graded, AVG(verdict='correct') AS correct, AVG(verdict='mix') AS mix, AVG(verdict='mistake') AS mistake FROM attempts"
         ) or {}
         n = overall.get("n") or 0
         by_street = self._rows(
@@ -124,7 +132,7 @@ class ProgressStore:
             "FROM attempts a GROUP BY a.solve_id ORDER BY n DESC LIMIT 20"
         )
         recent = self._rows(
-            "SELECT ts, solve_id, street, path, hero_role, combo, chosen, best, freq FROM attempts "
+            "SELECT ts, solve_id, street, path, hero_role, combo, chosen, best, freq, ev_loss_pot FROM attempts "
             "WHERE verdict='mistake' ORDER BY id DESC LIMIT 15"
         )
         for r in recent:
@@ -137,6 +145,8 @@ class ProgressStore:
         return {
             "total": n,
             "avg_score": overall.get("avg_score") if n else None,
+            "avg_ev_loss_pot": overall.get("avg_ev_loss_pot") if n else None,
+            "ev_graded": overall.get("ev_graded") or 0,
             "correct": overall.get("correct") if n else None,
             "mix": overall.get("mix") if n else None,
             "mistake": overall.get("mistake") if n else None,
@@ -174,7 +184,7 @@ class ProgressStore:
 
     def quiz_answers(self, day: str) -> dict[int, dict]:
         return {r["idx"]: r for r in self._rows(
-            "SELECT qa.idx, qa.chosen, qa.attempt_id, a.best, a.freq, a.score, a.verdict "
+            "SELECT qa.idx, qa.chosen, qa.attempt_id, a.best, a.freq, a.score, a.verdict, a.basis, a.ev_loss, a.ev_loss_pot "
             "FROM quiz_answers qa LEFT JOIN attempts a ON a.id = qa.attempt_id WHERE qa.day=?", (day,))}
 
     def save_quiz_answer(self, day: str, idx: int, chosen: str, attempt_id: int) -> bool:

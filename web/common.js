@@ -113,13 +113,29 @@ PL.decisionView = (st, onAct, disabled = false) => {
 };
 
 PL.feedbackView = (fb) => {
-  const word = { correct: "Correct", mix: "Acceptable (low-frequency)", mistake: "Mistake" }[fb.verdict];
+  const byEv = fb.basis === "ev";
+  const word = byEv
+    ? { correct: "Correct", mix: "Small EV loss", mistake: "Mistake" }[fb.verdict]
+    : { correct: "Correct", mix: "Acceptable (low-frequency)", mistake: "Mistake" }[fb.verdict];
+  const evLine = byEv
+    ? ` Your EV loss is ${PL.num(fb.ev_loss)} chips (${(fb.ev_loss_pot * 100).toFixed(1)}% of the pot).` +
+      (fb.ev_best && fb.ev_best !== fb.chosen ? ` The highest-EV action is ${PL.label(fb.ev_best)}.` : "")
+    : "";
+  const freqLine = byEv
+    ? ` The solver plays ${PL.label(fb.chosen)} ${PL.pct(fb.freq)} of the time with this hand.`
+    : ` You chose ${PL.label(fb.chosen)} — the solver does that ${PL.pct(fb.freq)} of the time with this hand.` +
+      (fb.best !== fb.chosen ? ` Its top choice is ${PL.label(fb.best)}.` : "");
+  const evTable = fb.evs && fb.actions
+    ? PL.el("div", { className: "muted small" },
+        `EV${byEv ? "" : " (approximate, not used for the verdict)"}: ` +
+        fb.actions.map((a, i) => `${PL.label(a)} ${fb.evs[i] == null ? "n/a" : PL.num(fb.evs[i])}`).join(" · "))
+    : null;
   return PL.el("div", { className: `feedback ${fb.verdict}` },
     PL.el("div", { className: "fb-head" },
       PL.el("strong", {}, word),
-      PL.el("span", { className: "muted" }, ` You chose ${PL.label(fb.chosen)} — the solver does that ${PL.pct(fb.freq)} of the time with this hand.` +
-        (fb.best !== fb.chosen ? ` Its top choice is ${PL.label(fb.best)}.` : ""))),
+      PL.el("span", { className: "muted" }, byEv ? `${evLine}${freqLine}` : freqLine)),
     PL.mixBars(fb.actions, fb.freqs, fb.chosen),
+    evTable,
     fb.explanation ? PL.el("p", { className: "muted small" }, fb.explanation) : null,
   );
 };

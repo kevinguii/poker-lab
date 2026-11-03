@@ -183,3 +183,44 @@ def test_generate_question_is_deterministic_and_valid(view):
     b = generate_question(view, random.Random(42))
     assert a == b
     assert view.combo_strategy(a["path"], a["combo"]) is not None
+
+
+# ------------------------------------------------------------- EV grading ----
+def test_grade_by_ev_loss_uses_pot_fraction():
+    acts = ["CHECK", "BET 25.000000", "BET 100.000000"]
+    freqs = [0.70, 0.27, 0.03]
+    evs = [10.0, 9.0, 4.0]                                  # pot 100: losses 1%, 6%
+    g = grade(acts, freqs, "BET 25.000000", evs=evs, pot=100.0)
+    assert g["basis"] == "ev" and math.isclose(g["ev_loss"], 1.0) and math.isclose(g["ev_loss_pot"], 0.01)
+    assert g["verdict"] == "correct" and g["ev_best"] == "CHECK" and math.isclose(g["score"], 1 - 0.01 / 0.25)
+    g = grade(acts, freqs, "BET 100.000000", evs=evs, pot=100.0)
+    assert g["verdict"] == "mistake" and g["best"] == "CHECK" and math.isclose(g["ev_loss_pot"], 0.06)
+    g = grade(acts, freqs, "BET 100.000000", evs=[10.0, 9.0, 6.5], pot=100.0)
+    assert g["verdict"] == "mix"                            # 3.5% of the pot
+
+
+def test_ev_grading_never_calls_the_solvers_top_action_a_mistake_and_overrides_frequency():
+    acts = ["CHECK", "BET 25.000000"]
+    g = grade(acts, [0.9, 0.1], "CHECK", evs=[1.0, 20.0], pot=100.0)   # poorly converged: EV disagrees with frequency
+    assert g["verdict"] == "correct" and g["basis"] == "ev"
+    g = grade(acts, [0.9, 0.1], "BET 25.000000", evs=[20.0, 19.9], pot=100.0)
+    assert g["verdict"] == "correct"                        # 10% frequency would have been only a "mix"
+    g = grade(acts, [0.6, 0.4], "BET 25.000000", evs=[20.0, 10.0], pot=100.0)
+    assert g["verdict"] == "correct" and g["ev_loss_pot"] == 0.10   # played 40% by the solver: solve noise, not a mistake
+
+
+def test_ev_is_ignored_when_inexact_or_missing():
+    acts = ["CHECK", "BET 25.000000"]
+    g = grade(acts, [0.9, 0.1], "BET 25.000000", evs=[20.0, 0.0], pot=100.0, ev_exact=False)
+    assert g["basis"] == "frequency" and g["verdict"] == "mix" and g["evs"] == [20.0, 0.0]
+    assert grade(acts, [0.9, 0.1], "BET 25.000000", evs=[20.0, None], pot=100.0)["basis"] == "frequency"
+    assert grade(acts, [0.9, 0.1], "BET 25.000000")["ev_loss"] is None
+
+
+def test_session_on_real_river_grades_by_ev_and_records_it(river_tree, river_spot):
+    view = SolveView(river_tree, river_spot)
+    seen = []
+    s = HandSession("t", "sid", view, "oop", random.Random(5), on_attempt=seen.append)
+    fb = s.act(s.state()["actions"][0]["action"])["feedback"]
+    assert fb["basis"] == "ev" and fb["ev_loss_pot"] is not None and len(fb["evs"]) == len(fb["actions"])
+    assert seen and seen[0]["ev_loss"] == fb["ev_loss"]

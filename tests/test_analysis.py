@@ -116,7 +116,12 @@ def test_flop_call_and_turn_bet_are_graded_against_the_tree(progress):
     assert math.isclose(fb["freq"], 0.5) and fb["verdict"] == "correct"
     assert (turn["street"], turn["status"], turn["matched"]) == ("turn", "graded", "BET 50.000000")
     assert math.isclose(turn["feedback"]["freq"], 0.5)
-    assert ev["summary"]["graded"] == 2 and ev["summary"]["mistakes"] == 0 and ev["summary"]["avg_score"] == 1.0
+    # The flop line reaches a truncated subtree (two cards to come: EV would only be approximate), so it stays
+    # frequency-graded. In this hand-built tree the turn's actions end the hand with one card to come and no chance
+    # node, which is exact, so the turn is EV-graded (real hand analysis solves flop+turn only, so real turn decisions
+    # fall back to frequency). The tree is not an equilibrium, hence a score below 1.
+    assert fb["basis"] == "frequency" and turn["feedback"]["basis"] == "ev"
+    assert ev["summary"]["graded"] == 2 and ev["summary"]["mistakes"] == 0 and 0.9 < ev["summary"]["avg_score"] <= 1.0
 
 
 def test_raise_is_matched_to_the_nearest_tree_size(progress):

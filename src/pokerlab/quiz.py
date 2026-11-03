@@ -13,7 +13,7 @@ from typing import Callable
 
 from .progress import ProgressStore
 from .strategy import SolveView
-from .training import decision_state, explain, generate_question, grade
+from .training import decision_state, explain, generate_question, grade, grade_at
 
 QUIZ_SIZE = 5
 
@@ -76,7 +76,10 @@ class DailyQuiz:
                 item["state"] = decision_state(view, q["path"], q["hero_role"], q["combo"])
                 item["solve_id"] = q["solve_id"]
                 if a:
+                    # Frequencies are re-derived for display; the verdict, score and EV loss are the ones stored when
+                    # it was answered (re-grading by EV would walk the subtree again on every page load).
                     fb = grade(*view.combo_strategy(q["path"], q["combo"]), a["chosen"])
+                    fb.update({k: a[k] for k in ("verdict", "score", "ev_loss", "ev_loss_pot", "basis")})
                     item["result"] = {**fb, "explanation": explain(view, q["path"], q["combo"], fb)}
             elif a:
                 item["result"] = {"chosen": a["chosen"], "best": a["best"], "freq": a["freq"], "score": a["score"],
@@ -105,10 +108,9 @@ class DailyQuiz:
         if q["solve_id"] not in set(self.done_solve_ids()):
             raise ValueError("the solve behind this question was deleted")
         view = self.get_view(q["solve_id"])
-        cs = view.combo_strategy(q["path"], q["combo"])
-        if cs is None:
+        fb = grade_at(view, q["path"], q["combo"], chosen)
+        if fb is None:
             raise ValueError("question is no longer valid")
-        fb = grade(*cs, chosen)
         ctx = view.context(q["path"])
         fb.update(solve_id=q["solve_id"], mode="quiz", street=ctx["street"], path=q["path"],
                   hero_role=q["hero_role"], combo=q["combo"], explanation=explain(view, q["path"], q["combo"], fb))

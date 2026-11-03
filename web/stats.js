@@ -1,8 +1,8 @@
 "use strict";
 /* Stats tab: accuracy over everything you've answered (trainer, drills and the daily quiz). */
 
-function statTile(label, value, cls = "") {
-  return PL.el("div", { className: `tile ${cls}` }, PL.el("div", { className: "tile-v" }, value), PL.el("div", { className: "muted small" }, label));
+function statTile(label, value, cls = "", title = "") {
+  return PL.el("div", { className: `tile ${cls}`, title }, PL.el("div", { className: "tile-v" }, value), PL.el("div", { className: "muted small" }, label));
 }
 
 async function loadStats() {
@@ -17,6 +17,7 @@ async function loadStats() {
     PL.el("div", { className: "tiles" },
       statTile("decisions", String(s.total)),
       statTile("average score", pc(s.avg_score)),
+      s.ev_graded ? statTile("avg EV loss", `${(s.avg_ev_loss_pot * 100).toFixed(1)}% pot`, "", `${s.ev_graded} of ${s.total} decisions graded by EV`) : "",
       statTile("correct", pc(s.correct), "good"),
       statTile("low-frequency", pc(s.mix), "mid"),
       statTile("mistakes", pc(s.mistake), "bad")),

@@ -1,11 +1,23 @@
 """Trainer engine: play hands against the solver, drill single nodes, grade decisions.
 
-Grading (no EV is available in TexasSolver's dump, so this is frequency based):
+Grading has two bases. When the EV of every action is available (see :mod:`pokerlab.ev`) and exact:
+
+    ev_loss = EV(best action) - EV(chosen)          as a fraction of the pot at the decision
+    score   = 1 - loss / 25% of pot, floored at 0
+    verdict = "correct"  chosen is a solver action played >= 25% of the time (solve noise can show up as a small
+                         EV gap between mixed actions), or loses <= 2% of the pot
+              "mix"      loses 2-5% of the pot
+              "mistake"  loses more than 5% of the pot
+
+Otherwise (EV too expensive to compute, or only approximate because the solve stops before the river) it falls back to
+the solver's frequency for your exact hand:
 
     score   = freq(chosen) / freq(best)            1.0 when you pick the solver's top action
     verdict = "correct"  chosen is the top action, or the solver takes it >= 25% of the time
               "mix"      the solver takes it 5-25% of the time (acceptable low-frequency play)
               "mistake"  the solver takes it < 5% of the time
+
+``basis`` in the result says which one was used; ``freq`` is always reported.
 """
 
 from __future__ import annotations
@@ -20,11 +32,17 @@ from .strategy import SolveView, action_label, is_deal, parse_action, DEAL
 CORRECT_MIN_FREQ = 0.25
 MIX_MIN_FREQ = 0.05
 
+EV_CORRECT_MAX_LOSS = 0.02   # fraction of the pot
+EV_MIX_MAX_LOSS = 0.05
+EV_SCORE_ZERO_AT = 0.25      # a loss of this fraction of the pot scores 0
+
 AttemptHook = Callable[[dict], None]
 
 
 # ---------------------------------------------------------------- grading ----
-def grade(actions: list[str], freqs: list[float], chosen: str) -> dict:
+def grade(actions: list[str], freqs: list[float], chosen: str,
+          evs: list[float | None] | None = None, pot: float | None = None, ev_exact: bool = True) -> dict:
+    """Grade ``chosen``. Pass ``evs`` (EV per action) and ``pot`` to grade by EV loss; see the module docstring."""
     if chosen not in actions:
         raise ValueError(f"{chosen!r} is not available here")
     f = freqs[actions.index(chosen)]
@@ -37,16 +55,49 @@ def grade(actions: list[str], freqs: list[float], chosen: str) -> dict:
         verdict = "mix"
     else:
         verdict = "mistake"
-    return {
+    out = {
         "chosen": chosen,
         "best": best,
         "freq": f,
         "score": score,
         "verdict": verdict,
+        "basis": "frequency",
+        "ev_loss": None,
+        "ev_loss_pot": None,
+        "ev_best": None,
+        "evs": None,
         "actions": actions,
         "freqs": list(freqs),
         "labels": [action_label(a) for a in actions],
     }
+    known = [e for e in (evs or []) if e is not None]
+    if evs and ev_exact and pot and pot > 0 and known and evs[actions.index(chosen)] is not None:
+        top = max(known)
+        loss = max(0.0, top - evs[actions.index(chosen)])
+        frac = loss / pot
+        out.update(
+            basis="ev",
+            evs=list(evs),
+            ev_best=actions[evs.index(top)],
+            ev_loss=loss,
+            ev_loss_pot=frac,
+            score=max(0.0, 1.0 - frac / EV_SCORE_ZERO_AT),
+            verdict="correct" if chosen == best or f >= CORRECT_MIN_FREQ or frac <= EV_CORRECT_MAX_LOSS
+            else "mix" if frac <= EV_MIX_MAX_LOSS else "mistake",
+        )
+    elif evs:
+        out["evs"] = list(evs)  # shown for information even when it is not used for the verdict
+    return out
+
+
+def grade_at(view: SolveView, path: list[str], combo: str, chosen: str) -> dict | None:
+    """Grade ``chosen`` for an exact hand at a node of ``view`` (EV when available); None if the hand has no strategy."""
+    cs = view.combo_strategy(path, combo)
+    if cs is None:
+        return None
+    ev = view.combo_evs(path, combo)
+    pot = view.context(path)["pot"]
+    return grade(cs[0], cs[1], chosen, *( (ev[0], pot, ev[1]) if ev else (None, None) ))
 
 
 # --------------------------------------------------------------- sampling ----
@@ -249,11 +300,9 @@ class HandSession:
         """Grade ``action``, advance the hand, and return ``{"feedback": ..., "state": ...}``."""
         if self.finished:
             raise ValueError("hand is already finished")
-        cs = self.view.combo_strategy(self.path, self.hero_combo)
-        if cs is None:
+        fb = grade_at(self.view, self.path, self.hero_combo, action)
+        if fb is None:
             raise ValueError("no strategy for your hand at this node")
-        actions, freqs = cs
-        fb = grade(actions, freqs, action)
         ctx = self.view.context(self.path)
         fb.update(
             solve_id=self.solve_id, mode=self.mode, street=ctx["street"], path=list(self.path),

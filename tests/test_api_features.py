@@ -154,7 +154,7 @@ def test_analyze_a_hand_end_to_end(client):
     assert a["solve"]["status"] == "done"
     decs = a["evaluation"]["decisions"]
     assert [d["street"] for d in decs] == ["flop", "turn"] and all(d["status"] == "graded" for d in decs)
-    assert a["evaluation"]["summary"]["avg_score"] == 1.0
+    assert 0.9 < a["evaluation"]["summary"]["avg_score"] <= 1.0
     listed = {h["id"]: h for h in client.get("/api/hands").json()}["900000001"]
     assert listed["solve"]["status"] == "done"
 

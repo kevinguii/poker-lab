@@ -83,3 +83,69 @@ def showdown(hero: list[str], villain: list[str], board: list[str]) -> int:
     """1 if hero wins, -1 if villain wins, 0 for a split pot."""
     h, v = best_hand(hero + board), best_hand(villain + board)
     return (h > v) - (h < v)
+
+
+# ---- fast integer ranking (used by the EV engine, which ranks thousands of hands per board) ----
+_SUIT = {"c": 0, "d": 1, "h": 2, "s": 3}
+
+
+def _straight_high(mask: int) -> int:
+    """Highest card of a straight in a rank bitmask (bit v set = rank value v present), or 0."""
+    for hi in range(14, 5, -1):
+        run = 0x1F << (hi - 4)
+        if mask & run == run:
+            return hi
+    return 5 if mask & 0x403C == 0x403C else 0  # wheel: A,2,3,4,5
+
+
+def _pack(cat: int, vals: tuple[int, ...]) -> int:
+    out = cat
+    for v in vals:
+        out = (out << 4) | v
+    return out << (4 * (5 - len(vals)))
+
+
+def pack_rank(rank: Rank) -> int:
+    """Integer form of a :func:`best_hand` rank; ``fast_rank(cards) == pack_rank(best_hand(cards))``."""
+    return _pack(rank[0], rank[1])
+
+
+def fast_rank(cards: list[str] | tuple[str, ...]) -> int:
+    """Same ordering as :func:`best_hand`, as a single int, without enumerating 5-card subsets (5-7 cards)."""
+    counts = [0] * 15
+    suits = [0, 0, 0, 0]
+    for c in cards:
+        v = _VAL[c[0]]
+        counts[v] += 1
+        suits[_SUIT[c[1]]] |= 1 << v
+    for m in suits:
+        if m.bit_count() >= 5:  # with <= 7 cards a flush can never coexist with quads or a full house
+            sf = _straight_high(m)
+            if sf:
+                return _pack(8, (sf,))
+            top = [v for v in range(14, 1, -1) if m >> v & 1][:5]
+            return _pack(5, tuple(top))
+    quads, trips, pairs, singles = [], [], [], []
+    mask = 0
+    for v in range(14, 1, -1):
+        n = counts[v]
+        if n:
+            mask |= 1 << v
+            (quads if n == 4 else trips if n == 3 else pairs if n == 2 else singles).append(v)
+    if quads:
+        kicker = max(trips + pairs + singles) if (trips or pairs or singles) else 0
+        return _pack(7, (quads[0], kicker))
+    if trips and (len(trips) > 1 or pairs):
+        second = max(trips[1:] + pairs)
+        return _pack(6, (trips[0], second))
+    st = _straight_high(mask)
+    if st:
+        return _pack(4, (st,))
+    if trips:
+        return _pack(3, (trips[0], *singles[:2]))
+    if len(pairs) >= 2:
+        kicker = max(pairs[2:] + singles) if (pairs[2:] or singles) else 0
+        return _pack(2, (pairs[0], pairs[1], kicker))
+    if pairs:
+        return _pack(1, (pairs[0], *singles[:3]))
+    return _pack(0, tuple(singles[:5]))

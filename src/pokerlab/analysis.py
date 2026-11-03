@@ -17,7 +17,7 @@ from .progress import ProgressStore
 from .ranges import canon_combo
 from .spot import DEFAULT_BET_SIZES, Spot
 from .strategy import SolveView, parse_action, action_label, DEAL
-from .training import grade
+from .training import grade_at
 
 UNIT = 10                      # solver chips per big blind (the solver rounds bets to whole chips)
 ANALYSIS_ACCURACY = 1.0        # % of pot: looser than the viewer default, flop solves are slow
@@ -238,11 +238,10 @@ def evaluate(view: SolveView, hand: dict, info: dict) -> dict:
 
             if alive:
                 if is_hero:
-                    cs = view.combo_strategy(path, combo)
-                    if cs is None:
+                    fb = grade_at(view, path, combo, matched)
+                    if fb is None:
                         status = "out_of_range"
                     else:
-                        fb = grade(cs[0], cs[1], matched)
                         fb["labels"] = [action_label(x) for x in fb["actions"]]
                         reach = view.reach(path)[hero_role].get(combo, 0.0)
                         if reach < 0.001:

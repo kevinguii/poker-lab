@@ -75,6 +75,7 @@ class SolveView:
         # The first player to act postflop is OOP.
         self._oop_id = tree["player"]
         self._ids = {"oop": self._oop_id, "ip": 1 - self._oop_id}
+        self._ev_cache: dict[tuple[str, ...], dict | None] = {}
 
     # ---- basics -------------------------------------------------------------
     def actor(self, node: dict) -> str:
@@ -275,6 +276,23 @@ class SolveView:
             return None
         freqs = _combo_strategies(node).get(canon_combo(combo))
         return (node["actions"], freqs) if freqs is not None else None
+
+    def node_evs(self, path: list[str]) -> dict | None:
+        """EV of every action for every combo of the player to act (see :mod:`pokerlab.ev`); cached per node.
+
+        ``None`` when the node is not a decision or the subtree is too large to evaluate."""
+        key = tuple(path)
+        if key not in self._ev_cache:
+            from .ev import node_evs  # local import: ev depends on this module
+
+            self._ev_cache[key] = node_evs(self, list(path))
+        return self._ev_cache[key]
+
+    def combo_evs(self, path: list[str], combo: str) -> tuple[list[float | None], bool] | None:
+        """``(EV per action, exact)`` for one exact combo, or None when EV is unavailable."""
+        res = self.node_evs(path)
+        row = res["ev"].get(canon_combo(combo)) if res else None
+        return (row, res["exact"]) if row is not None else None
 
     def hand_name(self, combo: str, board: list[str]) -> str | None:
         if len(board) < 3:
