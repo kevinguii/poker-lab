@@ -40,10 +40,15 @@
    explains or critiques using facts we pass in, it never produces a frequency, EV or equity.**
 7. **Curriculum and progress.** Order concepts (equity, pot odds, position, c-betting, sizing, check-raising, barrels,
    river), track mastery per concept from `attempts`, unlock the next module when mastery is reached, show it on Stats.
-8. **Range editor.** Paint ranges on the 13×13 grid instead of typing strings; import/export presets.
+8. **Range editor and card picker.** Paint ranges on the 13×13 grid instead of typing strings; import/export presets.
+   Pair with a click-to-pick board widget (rank × suit grid, greys out used/dead cards) so the board also never needs typing.
 9. **More hand history sources.** GGPoker and other formats; multiway hands (needs a multiway engine).
 10. **Presets by position.** Today a preset is keyed by pot type only (`srp`, `3bp`...). BTN-vs-BB and CO-vs-BTN differ a lot.
 11. **Solve queue controls.** Cancel a running solve, reorder the queue.
+12. **Live/manual trainer.** A mode where you drive the opponent's actions yourself (pick their action/bet size at each
+    node) instead of the trainer sampling them from the solver, so you can walk a real hand live rather than only via
+    imported history. `HandSession`/`SolveView` already carry all the pot/stack/reach bookkeeping across streets; needs
+    an API endpoint that advances the session with an explicit opponent action, plus a small UI for picking it.
 
 Cross-cutting, for items 2-7: new SQLite tables go in `progress.py` using `CREATE TABLE IF NOT EXISTS`, as the existing
 ones do; new API routes get their own `api_*.py` router registered in `api.py`; new UI is its own `web/*.js` hooked into

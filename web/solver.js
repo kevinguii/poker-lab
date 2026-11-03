@@ -128,6 +128,7 @@ function renderBreadcrumb() {
 /* ---------- solves list ---------- */
 async function refreshList() {
   const list = await PL.api("/api/solves");
+  SOLVER.anyPending = list.some((s) => s.status === "running" || s.status === "queued");
   PL.$("#solve-list").replaceChildren(...list.map((s) => {
     const li = PL.el("li", { className: s.id === SOLVER.sid ? "sel" : "" },
       PL.el("div", {}, PL.el("div", { textContent: s.board }),
@@ -167,7 +168,8 @@ async function openSolve(sid, keepPath = false) {
       (meta.spot && meta.spot.dump_rounds === 2 ? " · includes next street" : "") }));
   if (meta.status === "done") await loadNode();
   else { renderBreadcrumb(); showStatus(meta); PL.$("#drill-node").hidden = true; PL.$("#ctx-line").replaceChildren(); }
-  refreshList();
+  await refreshList();
+  PL.pollSolveList();   // (re)start polling: this solve may still be queued/running
 }
 PL.openSolve = (sid) => { PL.showTab("solver"); return openSolve(sid); };
 
@@ -253,7 +255,7 @@ PL.$("#drill-node").addEventListener("click", () => {
   PL.startDrill(SOLVER.sid, SOLVER.path.join(PL.SEP));
 });
 
-PL.hooks.solver = () => { refreshList().catch(() => {}); };
+PL.hooks.solver = () => { refreshList().catch(() => {}); PL.pollSolveList(); };
 PL.solverInit = async () => {
   const f = PL.$("#spot-form");
   buildGrid();
@@ -261,5 +263,18 @@ PL.solverInit = async () => {
   const sample = SOLVER.presets.find((p) => p.name === "srp-sample");
   if (sample) { f.oop_range.value = sample.oop_range; f.ip_range.value = sample.ip_range; }
   await refreshList();
-  setInterval(() => refreshList().catch(() => {}), 2000);
+  PL.pollSolveList();
+};
+
+// Poll the solve list every 2s only while something is queued/running; otherwise sit idle, so an open tab
+// doesn't hit the server at a fixed rate once there's nothing left to watch.
+PL.pollSolveList = () => {
+  if (SOLVER.polling) return;
+  SOLVER.polling = true;
+  const tick = async () => {
+    await refreshList().catch(() => {});
+    if (SOLVER.anyPending) setTimeout(tick, 2000);
+    else SOLVER.polling = false;
+  };
+  tick();
 };
